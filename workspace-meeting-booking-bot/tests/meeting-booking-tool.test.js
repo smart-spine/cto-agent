@@ -137,6 +137,7 @@ test("buildInsertRequest creates deterministic Google Calendar events.insert req
   const request = buildInsertRequest({
     calendarId: "team-calendar@example.com",
     accessToken: "oauth-token",
+    conferenceRequestId: "conference-request-1",
     event: {
       summary: "Project Sync",
       start: { dateTime: "2026-03-10T09:00:00+01:00", timeZone: "Europe/Warsaw" },
@@ -145,10 +146,13 @@ test("buildInsertRequest creates deterministic Google Calendar events.insert req
     },
   });
 
+  const requestUrl = new URL(request.url);
   assert.equal(
-    request.url,
-    `${GOOGLE_CALENDAR_API_BASE_URL}/calendars/team-calendar%40example.com/events?sendUpdates=all`,
+    `${requestUrl.origin}${requestUrl.pathname}`,
+    `${GOOGLE_CALENDAR_API_BASE_URL}/calendars/team-calendar%40example.com/events`,
   );
+  assert.equal(requestUrl.searchParams.get("sendUpdates"), "all");
+  assert.equal(requestUrl.searchParams.get("conferenceDataVersion"), "1");
   assert.equal(request.options.method, "POST");
   assert.equal(
     request.options.headers.Authorization,
@@ -160,6 +164,12 @@ test("buildInsertRequest creates deterministic Google Calendar events.insert req
     start: { dateTime: "2026-03-10T09:00:00+01:00", timeZone: "Europe/Warsaw" },
     end: { dateTime: "2026-03-10T09:30:00+01:00", timeZone: "Europe/Warsaw" },
     attendees: [{ email: "a@example.com" }, { email: "b@example.com" }],
+    conferenceData: {
+      createRequest: {
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+        requestId: "conference-request-1",
+      },
+    },
   });
 });
 
@@ -316,10 +326,13 @@ test("insertGoogleCalendarEvent auto-refreshes access token then books event", a
 
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, GOOGLE_OAUTH_TOKEN_URL);
+  const insertUrl = new URL(calls[1].url);
   assert.equal(
-    calls[1].url,
-    `${GOOGLE_CALENDAR_API_BASE_URL}/calendars/strict-calendar-id/events?sendUpdates=all`,
+    `${insertUrl.origin}${insertUrl.pathname}`,
+    `${GOOGLE_CALENDAR_API_BASE_URL}/calendars/strict-calendar-id/events`,
   );
+  assert.equal(insertUrl.searchParams.get("sendUpdates"), "all");
+  assert.equal(insertUrl.searchParams.get("conferenceDataVersion"), "1");
   assert.equal(calls[1].options.headers.Authorization, "Bearer runtime-access-token");
   const body = JSON.parse(calls[1].options.body);
   assert.equal(body.start.timeZone, DEFAULT_TIMEZONE);
@@ -328,10 +341,110 @@ test("insertGoogleCalendarEvent auto-refreshes access token then books event", a
     { email: "guest-a@example.com" },
     { email: "guest-b@example.com" },
   ]);
+  assert.equal(body.conferenceData.createRequest.conferenceSolutionKey.type, "hangoutsMeet");
+  assert.equal(typeof body.conferenceData.createRequest.requestId, "string");
+  assert.ok(body.conferenceData.createRequest.requestId.length > 0);
   assert.equal(result.message, "Booked ✅ https://calendar.google.com/event?eid=event-123");
   assert.deepEqual(result, {
     message: "Booked ✅ https://calendar.google.com/event?eid=event-123",
   });
+});
+
+test("insertGoogleCalendarEvent prefers Meet link over htmlLink in success message", async () => {
+  let callIndex = 0;
+  const result = await insertGoogleCalendarEvent({
+    config: {},
+    booking: {
+      summary: "Meet-first booking",
+      start: "2026-03-10T10:00:00+01:00",
+      end: "2026-03-10T10:30:00+01:00",
+    },
+    credentials: {
+      refreshToken: "refresh-token-meet-link",
+      clientSecret: { value: CLIENT_SECRET_JSON },
+    },
+    fetchImpl: async () => {
+      callIndex += 1;
+      if (callIndex === 1) {
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              access_token: "meet-link-access-token",
+              token_type: "Bearer",
+            };
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            id: "event-456",
+            hangoutLink: "https://meet.google.com/abc-defg-hij",
+            htmlLink: "https://calendar.google.com/event?eid=event-456",
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(result.message, "Booked ✅ https://meet.google.com/abc-defg-hij");
+});
+
+test("insertGoogleCalendarEvent uses conferenceData video link when hangoutLink is unavailable", async () => {
+  let callIndex = 0;
+  const result = await insertGoogleCalendarEvent({
+    config: {},
+    booking: {
+      summary: "Conference entry-point booking",
+      start: "2026-03-10T10:00:00+01:00",
+      end: "2026-03-10T10:30:00+01:00",
+    },
+    credentials: {
+      refreshToken: "refresh-token-entry-point",
+      clientSecret: { value: CLIENT_SECRET_JSON },
+    },
+    fetchImpl: async () => {
+      callIndex += 1;
+      if (callIndex === 1) {
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              access_token: "entry-point-access-token",
+              token_type: "Bearer",
+            };
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            id: "event-789",
+            conferenceData: {
+              entryPoints: [
+                {
+                  entryPointType: "video",
+                  uri: "https://meet.google.com/xyz-abcd-efg",
+                },
+              ],
+            },
+            htmlLink: "https://calendar.google.com/event?eid=event-789",
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(result.message, "Booked ✅ https://meet.google.com/xyz-abcd-efg");
 });
 
 test("insertGoogleCalendarEvent falls back to primary calendar when config.calendarId is absent", async () => {
@@ -377,10 +490,13 @@ test("insertGoogleCalendarEvent falls back to primary calendar when config.calen
   });
 
   assert.equal(calls.length, 2);
+  const insertUrl = new URL(calls[1].url);
   assert.equal(
-    calls[1].url,
-    `${GOOGLE_CALENDAR_API_BASE_URL}/calendars/primary/events?sendUpdates=all`,
+    `${insertUrl.origin}${insertUrl.pathname}`,
+    `${GOOGLE_CALENDAR_API_BASE_URL}/calendars/primary/events`,
   );
+  assert.equal(insertUrl.searchParams.get("sendUpdates"), "all");
+  assert.equal(insertUrl.searchParams.get("conferenceDataVersion"), "1");
 });
 
 test("insertGoogleCalendarEvent maps missing refresh token to clear booking error", async () => {
@@ -435,6 +551,13 @@ test("refreshGoogleAccessToken maps OAuth failure to user-facing refresh error",
       );
       return true;
     },
+  );
+});
+
+test("toUserFacingBookingError maps invalid insert response to clear link error", () => {
+  assert.equal(
+    toUserFacingBookingError({ code: "GOOGLE_CALENDAR_INVALID_INSERT_RESPONSE" }),
+    "Booking failed: Google Calendar returned event without a usable booking link.",
   );
 });
 

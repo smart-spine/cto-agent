@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
@@ -20,6 +21,7 @@ const ACCESS_TOKEN_REFRESH_FAILED_ERROR = "GOOGLE_ACCESS_TOKEN_REFRESH_FAILED";
 const INVALID_OAUTH_TOKEN_RESPONSE_ERROR = "GOOGLE_OAUTH_TOKEN_INVALID_RESPONSE";
 const INSERT_FAILED_ERROR = "GOOGLE_CALENDAR_INSERT_FAILED";
 const INVALID_INSERT_RESPONSE_ERROR = "GOOGLE_CALENDAR_INVALID_INSERT_RESPONSE";
+const MEET_CONFERENCE_SOLUTION_TYPE = "hangoutsMeet";
 
 class BookingToolError extends Error {
   constructor({ code, message, status, cause }) {
@@ -315,21 +317,105 @@ function buildRefreshAccessTokenRequest({
   });
 }
 
+function trimmedStringOrNull(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function generateConferenceRequestId() {
+  if (typeof crypto.randomUUID === "function") {
+    return `meeting-booking-bot-${crypto.randomUUID()}`;
+  }
+  return `meeting-booking-bot-${Date.now()}`;
+}
+
+function buildMeetConferenceData(existingConferenceData, conferenceRequestId) {
+  const conferenceData = ensureObject(
+    existingConferenceData,
+    "event.conferenceData",
+  );
+  const existingCreateRequest = ensureObject(
+    conferenceData.createRequest,
+    "event.conferenceData.createRequest",
+  );
+  const existingConferenceSolutionKey = ensureObject(
+    existingCreateRequest.conferenceSolutionKey,
+    "event.conferenceData.createRequest.conferenceSolutionKey",
+  );
+
+  return {
+    ...conferenceData,
+    createRequest: {
+      ...existingCreateRequest,
+      conferenceSolutionKey: {
+        ...existingConferenceSolutionKey,
+        type: MEET_CONFERENCE_SOLUTION_TYPE,
+      },
+      requestId:
+        trimmedStringOrNull(conferenceRequestId) || generateConferenceRequestId(),
+    },
+  };
+}
+
+function extractConferenceVideoLink(conferenceData) {
+  if (!conferenceData || typeof conferenceData !== "object" || Array.isArray(conferenceData)) {
+    return null;
+  }
+
+  const { entryPoints } = conferenceData;
+  if (!Array.isArray(entryPoints)) {
+    return null;
+  }
+
+  for (const entryPoint of entryPoints) {
+    if (!entryPoint || typeof entryPoint !== "object" || Array.isArray(entryPoint)) {
+      continue;
+    }
+    const entryPointType = trimmedStringOrNull(entryPoint.entryPointType);
+    const uri = trimmedStringOrNull(entryPoint.uri);
+    if (entryPointType === "video" && uri) {
+      return uri;
+    }
+  }
+
+  return null;
+}
+
+function resolvePreferredBookingLink(responseBody) {
+  if (!responseBody || typeof responseBody !== "object" || Array.isArray(responseBody)) {
+    return null;
+  }
+
+  return (
+    trimmedStringOrNull(responseBody.hangoutLink) ||
+    extractConferenceVideoLink(responseBody.conferenceData) ||
+    trimmedStringOrNull(responseBody.htmlLink)
+  );
+}
+
 function buildInsertRequest({
   calendarId,
   accessToken,
   event,
+  conferenceRequestId,
   baseUrl = GOOGLE_CALENDAR_API_BASE_URL,
 }) {
   const safeCalendarId = ensureNonEmptyString(calendarId, "calendarId");
   const safeAccessToken = ensureNonEmptyString(accessToken, "accessToken");
-  ensureObject(event, "event");
+  const safeEvent = ensureObject(event, "event");
   const safeBaseUrl = ensureNonEmptyString(baseUrl, "baseUrl");
+  const eventWithConferenceData = {
+    ...safeEvent,
+    conferenceData: buildMeetConferenceData(
+      safeEvent.conferenceData,
+      conferenceRequestId,
+    ),
+  };
 
   const url = new URL(
     `${safeBaseUrl}/calendars/${encodeURIComponent(safeCalendarId)}/events`,
   );
   url.searchParams.set("sendUpdates", "all");
+  url.searchParams.set("conferenceDataVersion", "1");
   return {
     url: url.toString(),
     options: {
@@ -338,14 +424,14 @@ function buildInsertRequest({
         Authorization: `Bearer ${safeAccessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(event),
+      body: JSON.stringify(eventWithConferenceData),
     },
   };
 }
 
-function formatBookingSuccess(htmlLink) {
-  const link = ensureNonEmptyString(htmlLink, "event.htmlLink");
-  return `${BOOKING_SUCCESS_PREFIX} ${link}`;
+function formatBookingSuccess(link) {
+  const safeLink = ensureNonEmptyString(link, "event.link");
+  return `${BOOKING_SUCCESS_PREFIX} ${safeLink}`;
 }
 
 async function safeReadJson(response) {
@@ -539,6 +625,9 @@ function toUserFacingBookingError(error) {
   if (error && error.code === INSERT_FAILED_ERROR) {
     return "Booking failed: Google Calendar rejected the insert request.";
   }
+  if (error && error.code === INVALID_INSERT_RESPONSE_ERROR) {
+    return "Booking failed: Google Calendar returned event without a usable booking link.";
+  }
   return "Booking failed: unexpected error.";
 }
 
@@ -599,20 +688,17 @@ async function insertGoogleCalendarEvent(input = {}) {
     });
   }
 
-  const htmlLink =
-    responseBody && hasOwn(responseBody, "htmlLink")
-      ? responseBody.htmlLink
-      : undefined;
-  if (typeof htmlLink !== "string" || !htmlLink.trim()) {
+  const bookingLink = resolvePreferredBookingLink(responseBody);
+  if (!bookingLink) {
     throw new BookingToolError({
       code: INVALID_INSERT_RESPONSE_ERROR,
       message:
-        "Google Calendar events.insert succeeded but response htmlLink is missing.",
+        "Google Calendar events.insert succeeded but response is missing Meet and event links.",
     });
   }
 
   return {
-    message: formatBookingSuccess(htmlLink),
+    message: formatBookingSuccess(bookingLink),
   };
 }
 
@@ -635,9 +721,12 @@ module.exports = {
   buildRefreshAccessTokenRequest,
   buildInsertRequest,
   exchangeGoogleAuthCodeForRefreshToken,
+  extractConferenceVideoLink,
   formatBookingSuccess,
+  buildMeetConferenceData,
   insertGoogleCalendarEvent,
   refreshGoogleAccessToken,
+  resolvePreferredBookingLink,
   resolveOAuthClientCredentials,
   resolveRefreshToken,
   toUserFacingBookingError,
