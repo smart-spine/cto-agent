@@ -132,6 +132,10 @@ with_openclaw_env() {
 stop_gateway_background() {
   local openclaw_home="${OPENCLAW_HOME:-$HOME/.openclaw}"
   local pid_file="${openclaw_home}/.gateway.pid"
+  if with_openclaw_env openclaw health --json >/dev/null 2>&1; then
+    with_openclaw_env openclaw gateway stop >/dev/null 2>&1 || true
+    sleep 1
+  fi
   if [[ -f "${pid_file}" ]]; then
     local pid
     pid="$(cat "${pid_file}" 2>/dev/null || true)"
@@ -185,4 +189,3 @@ wait_for_gateway_health() {
     sleep 1
   done
 }
-

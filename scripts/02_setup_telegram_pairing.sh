@@ -20,6 +20,8 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 AUTO_CONFIRM="${AUTO_CONFIRM:-false}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
+PAIRING_TELEGRAM_USER_ID="${PAIRING_TELEGRAM_USER_ID:-}"
+TELEGRAM_PAIRING_TIMEOUT_SECONDS="${TELEGRAM_PAIRING_TIMEOUT_SECONDS:-90}"
 
 ensure_telegram_plugin_enabled() {
   require_cmd openclaw
@@ -70,44 +72,56 @@ PY
 }
 
 extract_pairing_code() {
-  python3 - <<'PY'
-import json
-import sys
+  local raw="${1:-}"
+  local target_uid="${2:-}"
+  if [[ -z "${raw}" ]]; then
+    return 0
+  fi
+  printf "%s" "${raw}" | jq -r --arg uid "${target_uid}" '
+    def reqs:
+      if type == "array" then .
+      elif type == "object" then (.requests // [])
+      else [] end;
+    if ($uid | length) > 0
+    then (reqs | map(select((.id | tostring) == $uid)) | .[0].code // empty)
+    else (reqs[0].code // empty)
+    end
+  ' 2>/dev/null || true
+}
 
-raw = sys.stdin.read().strip()
-if not raw:
-    raise SystemExit(0)
+fetch_pairing_requests_json() {
+  local out
+  out="$(with_openclaw_env openclaw pairing list --channel telegram --json 2>/dev/null || true)"
+  if printf "%s" "${out}" | jq -e . >/dev/null 2>&1; then
+    printf "%s" "${out}"
+    return 0
+  fi
 
-try:
-    data = json.loads(raw)
-except Exception:
-    raise SystemExit(0)
+  out="$(with_openclaw_env openclaw pairing list telegram --json 2>/dev/null || true)"
+  if printf "%s" "${out}" | jq -e . >/dev/null 2>&1; then
+    printf "%s" "${out}"
+    return 0
+  fi
 
-candidates = []
+  printf ""
+}
 
-def add_candidate(value):
-    if isinstance(value, str):
-        v = value.strip()
-        if v:
-            candidates.append(v)
-
-def visit(obj):
-    if isinstance(obj, dict):
-        for key in ("code", "pairingCode", "pair_code", "pairing_code"):
-            add_candidate(obj.get(key))
-        for value in obj.values():
-            visit(value)
-    elif isinstance(obj, list):
-        for item in obj:
-            visit(item)
-    elif isinstance(obj, str):
-        add_candidate(obj)
-
-visit(data)
-
-if candidates:
-    print(candidates[0])
-PY
+wait_for_pairing_code() {
+  local timeout="${TELEGRAM_PAIRING_TIMEOUT_SECONDS}"
+  local started
+  started="$(date +%s)"
+  while (( "$(date +%s)" - started < timeout )); do
+    local pending_json
+    pending_json="$(fetch_pairing_requests_json)"
+    local code
+    code="$(extract_pairing_code "${pending_json}" "${PAIRING_TELEGRAM_USER_ID}")"
+    if [[ -n "${code}" ]]; then
+      printf "%s" "${code}"
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
 }
 
 main() {
@@ -145,7 +159,7 @@ main() {
   fi
 
   log_info "Stage 6/7: Waiting for pairing trigger from user."
-  echo "Please send any message to your Telegram bot. Press ENTER here when you receive the 'pairing required' message from the bot"
+  echo "Please send any message to your Telegram bot. Press ENTER here when you receive the 'pairing required' message from the bot."
   if [[ "${AUTO_CONFIRM}" != "true" ]]; then
     if [[ "${NON_INTERACTIVE}" == "true" ]]; then
       die "AUTO_CONFIRM must be true when NON_INTERACTIVE=true."
@@ -154,17 +168,14 @@ main() {
   fi
 
   log_info "Stage 7/7: Attempting automatic pairing approval."
-  local pending_json
-  pending_json="$(with_openclaw_env openclaw pairing list --channel telegram --json 2>/dev/null || true)"
   local pairing_code=""
-  pairing_code="$(printf "%s" "${pending_json}" | extract_pairing_code || true)"
-
-  if [[ -z "${pairing_code}" ]]; then
-    log_warn "No pending pairing code found yet. Re-run this script after receiving the pairing prompt."
+  if ! pairing_code="$(wait_for_pairing_code)"; then
+    log_warn "No pending pairing code found within ${TELEGRAM_PAIRING_TIMEOUT_SECONDS}s."
+    log_warn "Run manually when you receive a code: openclaw pairing approve telegram <PAIRING_CODE>"
     exit 0
   fi
 
-  with_openclaw_env openclaw pairing approve --channel telegram "${pairing_code}" --notify >/dev/null
+  with_openclaw_env openclaw pairing approve telegram "${pairing_code}" --notify >/dev/null
   log_info "Pairing approved successfully for Telegram."
 }
 
