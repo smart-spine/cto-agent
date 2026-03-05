@@ -99,6 +99,16 @@ openclaw agent --local --agent cto-factory --message "Reply with CTO_FACTORY_OK"
 
 ## Common Failures and Fixes
 
+### `Malformed entry ... /etc/apt/sources.list.d/nodesource.sources (URI)`
+
+Cause: broken stale NodeSource source file from previous installs.
+
+Fix:
+```bash
+sudo rm -f /etc/apt/sources.list.d/nodesource.sources /etc/apt/sources.list.d/nodesource.list /etc/apt/sources.list.d/nodesource.list.save
+sudo apt-get update
+```
+
 ### `Unknown channel: telegram`
 
 Cause: Telegram plugin is disabled.

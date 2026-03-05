@@ -72,7 +72,7 @@ assert_supported_os() {
 }
 
 cleanup_stale_nodesource() {
-  # Some hosts keep stale NodeSource entries without keys, which breaks apt update noise-wise.
+  # Some hosts keep stale NodeSource entries without keys, which breaks apt update.
   local stale_files=""
   stale_files="$(
     run_as_root bash -lc "grep -RIl 'deb\\.nodesource\\.com' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true"
@@ -81,12 +81,18 @@ cleanup_stale_nodesource() {
     log_warn "Removing stale NodeSource apt entries."
     while IFS= read -r file; do
       [[ -n "${file}" ]] || continue
-      run_as_root sed -i '/deb\.nodesource\.com/d' "${file}" || true
-      run_as_root sed -i '/nodesource\.com/d' "${file}" || true
+      if [[ "${file}" == /etc/apt/sources.list.d/* ]]; then
+        # For deb822 .sources files, line editing can leave malformed stanzas. Remove file fully.
+        run_as_root rm -f "${file}" || true
+      else
+        run_as_root sed -i '/deb\.nodesource\.com/d' "${file}" || true
+        run_as_root sed -i '/nodesource\.com/d' "${file}" || true
+      fi
     done <<< "${stale_files}"
   fi
   run_as_root rm -f \
     /etc/apt/sources.list.d/nodesource.list \
+    /etc/apt/sources.list.d/nodesource.sources \
     /etc/apt/sources.list.d/nodesource.list.save \
     /etc/apt/keyrings/nodesource.gpg \
     /usr/share/keyrings/nodesource.gpg || true
