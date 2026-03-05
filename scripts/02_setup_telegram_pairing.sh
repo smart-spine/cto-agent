@@ -89,6 +89,24 @@ extract_pairing_code() {
   ' 2>/dev/null || true
 }
 
+extract_pairing_user_id() {
+  local raw="${1:-}"
+  local target_uid="${2:-}"
+  if [[ -z "${raw}" ]]; then
+    return 0
+  fi
+  printf "%s" "${raw}" | jq -r --arg uid "${target_uid}" '
+    def reqs:
+      if type == "array" then .
+      elif type == "object" then (.requests // [])
+      else [] end;
+    if ($uid | length) > 0
+    then (reqs | map(select((.id | tostring) == $uid)) | .[0].id // empty)
+    else (reqs[0].id // empty)
+    end
+  ' 2>/dev/null || true
+}
+
 fetch_pairing_requests_json() {
   local out
   out="$(with_openclaw_env openclaw pairing list --channel telegram --json 2>/dev/null || true)"
@@ -122,6 +140,52 @@ wait_for_pairing_code() {
     sleep 2
   done
   return 1
+}
+
+allow_group_user() {
+  local telegram_user_id="${1:-}"
+  if [[ -z "${telegram_user_id}" ]]; then
+    return 0
+  fi
+  local config_path="${OPENCLAW_HOME}/openclaw.json"
+  backup_file "${config_path}"
+  python3 - "${config_path}" "${telegram_user_id}" <<'PY'
+import json
+import pathlib
+import sys
+
+config_path = pathlib.Path(sys.argv[1])
+uid = str(sys.argv[2]).strip()
+if not uid:
+    raise SystemExit(0)
+
+data = json.loads(config_path.read_text(encoding="utf-8"))
+channels = data.setdefault("channels", {})
+telegram = channels.setdefault("telegram", {})
+
+telegram.setdefault("groupPolicy", "allowlist")
+global_allow = {str(x).strip() for x in telegram.get("groupAllowFrom", []) if str(x).strip()}
+global_allow.add(uid)
+telegram["groupAllowFrom"] = sorted(global_allow)
+
+accounts = telegram.setdefault("accounts", {})
+default_account = accounts.setdefault("default", {})
+default_account.setdefault("groupPolicy", "allowlist")
+account_allow = {str(x).strip() for x in default_account.get("groupAllowFrom", []) if str(x).strip()}
+account_allow.add(uid)
+default_account["groupAllowFrom"] = sorted(account_allow)
+
+groups = telegram.get("groups", {})
+if isinstance(groups, dict):
+    for _, group_cfg in groups.items():
+        if isinstance(group_cfg, dict):
+            group_cfg.setdefault("groupPolicy", "allowlist")
+            allow = {str(x).strip() for x in group_cfg.get("allowFrom", []) if str(x).strip()}
+            allow.add(uid)
+            group_cfg["allowFrom"] = sorted(allow)
+
+config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
 }
 
 main() {
@@ -168,15 +232,25 @@ main() {
   fi
 
   log_info "Stage 7/7: Attempting automatic pairing approval."
+  local pending_json=""
+  local paired_user_id=""
   local pairing_code=""
   if ! pairing_code="$(wait_for_pairing_code)"; then
     log_warn "No pending pairing code found within ${TELEGRAM_PAIRING_TIMEOUT_SECONDS}s."
     log_warn "Run manually when you receive a code: openclaw pairing approve telegram <PAIRING_CODE>"
     exit 0
   fi
+  pending_json="$(fetch_pairing_requests_json)"
+  paired_user_id="$(extract_pairing_user_id "${pending_json}" "${PAIRING_TELEGRAM_USER_ID}")"
 
   with_openclaw_env openclaw pairing approve telegram "${pairing_code}" --notify >/dev/null
+  allow_group_user "${paired_user_id}"
+  restart_gateway_background || true
+  wait_for_gateway_health 90 || true
   log_info "Pairing approved successfully for Telegram."
+  if [[ -n "${paired_user_id}" ]]; then
+    log_info "Added Telegram user ${paired_user_id} to group allowlists."
+  fi
 }
 
 main "$@"
