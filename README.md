@@ -21,7 +21,7 @@ Implementation policy inside CTO agent:
 Run this on the server first:
 
 ```bash
-sudo bash -lc 'apt-get update -qq && apt-get install -y -qq ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/openclaw-root-monorepo/scripts/00_bootstrap_dependencies.sh | bash'
+sudo bash -lc 'rm -f /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg /usr/share/keyrings/nodesource.gpg; apt-get update -qq && apt-get install -y -qq ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/codex/openclaw-root-monorepo/scripts/00_bootstrap_dependencies.sh | bash'
 ```
 
 What this does:
