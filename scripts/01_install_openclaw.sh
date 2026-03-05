@@ -20,6 +20,7 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_PORT="${OPENCLAW_PORT:-18789}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
+GATEWAY_TOKEN_MODE="${GATEWAY_TOKEN_MODE:-prompt}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_GATEWAY_START="${SKIP_GATEWAY_START:-false}"
 
@@ -53,6 +54,71 @@ install_node_22() {
   log_info "Installing Node.js 22."
   run_as_root bash -lc "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"
   apt_retry install -y -qq nodejs
+}
+
+generate_gateway_token() {
+  local token=""
+  if command -v openssl >/dev/null 2>&1; then
+    token="$(openssl rand -hex 32 2>/dev/null || true)"
+  fi
+  if [[ -z "${token}" ]]; then
+    token="$(python3 - <<'PY'
+import secrets
+print(secrets.token_urlsafe(48))
+PY
+)"
+  fi
+  [[ -n "${token}" ]] || die "Failed to generate OPENCLAW_GATEWAY_TOKEN."
+  printf "%s" "${token}"
+}
+
+resolve_gateway_token() {
+  if [[ -n "${OPENCLAW_GATEWAY_TOKEN}" ]]; then
+    log_info "Using OPENCLAW_GATEWAY_TOKEN from environment."
+    return 0
+  fi
+
+  if [[ "${NON_INTERACTIVE}" == "true" ]]; then
+    case "${GATEWAY_TOKEN_MODE}" in
+      auto|prompt|"")
+        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically (non-interactive mode)."
+        ;;
+      manual)
+        die "GATEWAY_TOKEN_MODE=manual requires OPENCLAW_GATEWAY_TOKEN to be set."
+        ;;
+      *)
+        die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
+        ;;
+    esac
+    return 0
+  fi
+
+  case "${GATEWAY_TOKEN_MODE}" in
+    auto)
+      OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+      log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
+      ;;
+    manual)
+      prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
+      ;;
+    prompt|"")
+      echo "Choose OPENCLAW_GATEWAY_TOKEN setup:"
+      echo "  1) Auto-generate now (recommended)"
+      echo "  2) Enter manually"
+      local choice=""
+      read -r -p "Choice [1/2] (default 1): " choice
+      if [[ "${choice}" == "2" ]]; then
+        prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
+      else
+        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
+      fi
+      ;;
+    *)
+      die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
+      ;;
+  esac
 }
 
 ensure_openclaw_config() {
@@ -158,7 +224,7 @@ main() {
 
   log_info "Stage 4/8: Collecting secrets."
   prompt_secret OPENAI_API_KEY "Enter OPENAI_API_KEY"
-  prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
+  resolve_gateway_token
 
   log_info "Stage 5/8: Authenticating Codex CLI with OpenAI API key."
   if ! printf "%s" "${OPENAI_API_KEY}" | codex login --with-api-key >/dev/null 2>&1; then

@@ -42,6 +42,20 @@ chmod +x scripts/lib/common.sh scripts/00_bootstrap_dependencies.sh scripts/01_i
 ./scripts/03_deploy_cto_agent.sh
 ```
 
+`scripts/01_install_openclaw.sh` will ask how to set `OPENCLAW_GATEWAY_TOKEN`:
+- auto-generate (recommended)
+- enter manually
+
+You can force mode in advance:
+
+```bash
+# always auto-generate (useful for CI/non-interactive runs)
+export GATEWAY_TOKEN_MODE=auto
+
+# require manual token input (or pre-set OPENCLAW_GATEWAY_TOKEN)
+export GATEWAY_TOKEN_MODE=manual
+```
+
 ## Zero-to-Server Bootstrap (copy-paste on clean Ubuntu)
 
 If the server is fresh and does not even have `git`, run this single command first:

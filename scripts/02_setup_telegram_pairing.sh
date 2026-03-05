@@ -21,6 +21,29 @@ TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 AUTO_CONFIRM="${AUTO_CONFIRM:-false}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 
+ensure_telegram_plugin_enabled() {
+  require_cmd openclaw
+  require_cmd jq
+
+  local plugins_json
+  plugins_json="$(with_openclaw_env openclaw plugins list --json 2>/dev/null || true)"
+  if [[ -z "${plugins_json}" ]]; then
+    die "Failed to query OpenClaw plugins."
+  fi
+
+  if ! printf "%s" "${plugins_json}" | jq -e '.plugins[]? | select(.id=="telegram")' >/dev/null 2>&1; then
+    die "Telegram plugin is not available in this OpenClaw build."
+  fi
+
+  if printf "%s" "${plugins_json}" | jq -e '.plugins[]? | select(.id=="telegram" and .enabled==true)' >/dev/null 2>&1; then
+    log_info "Telegram plugin already enabled."
+    return 0
+  fi
+
+  log_info "Enabling Telegram plugin."
+  with_openclaw_env openclaw plugins enable telegram >/dev/null
+}
+
 ensure_telegram_config() {
   local config_path="${OPENCLAW_HOME}/openclaw.json"
   backup_file "${config_path}"
@@ -99,13 +122,16 @@ main() {
   prompt_secret TELEGRAM_BOT_TOKEN "Enter TELEGRAM_BOT_TOKEN"
   upsert_env_var "${OPENCLAW_HOME}/.env" "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN}"
 
-  log_info "Stage 2/6: Configuring Telegram channel account."
+  log_info "Stage 2/7: Ensuring Telegram plugin is enabled."
+  ensure_telegram_plugin_enabled
+
+  log_info "Stage 3/7: Configuring Telegram channel account."
   with_openclaw_env openclaw channels add --channel telegram --account default --token "${TELEGRAM_BOT_TOKEN}" >/dev/null
 
-  log_info "Stage 3/6: Ensuring telegram config in openclaw.json."
+  log_info "Stage 4/7: Ensuring telegram config in openclaw.json."
   ensure_telegram_config
 
-  log_info "Stage 4/6: Validating config and restarting gateway."
+  log_info "Stage 5/7: Validating config and restarting gateway."
   local validate_out
   validate_out="$(with_openclaw_env openclaw config validate --json 2>&1 || true)"
   if ! printf "%s" "${validate_out}" | jq -e '.valid == true' >/dev/null 2>&1; then
@@ -118,7 +144,7 @@ main() {
     die "Gateway health check timed out after Telegram setup."
   fi
 
-  log_info "Stage 5/6: Waiting for pairing trigger from user."
+  log_info "Stage 6/7: Waiting for pairing trigger from user."
   echo "Please send any message to your Telegram bot. Press ENTER here when you receive the 'pairing required' message from the bot"
   if [[ "${AUTO_CONFIRM}" != "true" ]]; then
     if [[ "${NON_INTERACTIVE}" == "true" ]]; then
@@ -127,7 +153,7 @@ main() {
     read -r
   fi
 
-  log_info "Stage 6/6: Attempting automatic pairing approval."
+  log_info "Stage 7/7: Attempting automatic pairing approval."
   local pending_json
   pending_json="$(with_openclaw_env openclaw pairing list --channel telegram --json 2>/dev/null || true)"
   local pairing_code=""
