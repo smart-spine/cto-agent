@@ -82,7 +82,7 @@ The script will ask for:
 - group id
 - topic id
 
-## [AUTO]Post-Install Checks
+## [OPTIONAL]Post-Install Checks
 
 ```bash
 openclaw --version
