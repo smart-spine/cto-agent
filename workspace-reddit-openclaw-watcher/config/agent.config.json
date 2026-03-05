@@ -1,0 +1,25 @@
+{
+  "id": "reddit-openclaw-watcher",
+  "name": "Reddit OpenClaw Watcher",
+  "responsibility": "Poll both r/openclaw RSS and Reddit RSS search for OpenClaw OR ClawdBot, merge/deduplicate posts, and forward only new posts from the last hour to Telegram topic 220.",
+  "keywords": [
+    "OpenClaw",
+    "ClawdBot"
+  ],
+  "schedule": {
+    "cron": "0 * * * *"
+  },
+  "destination": {
+    "platform": "telegram",
+    "chatId": "-1003633569118",
+    "topicId": 220
+  },
+  "state": {
+    "file": "config/state.json",
+    "retention": "last-hour-entries-only"
+  },
+  "failurePolicy": {
+    "fetchRetryAttempts": 3,
+    "notifyAfterConsecutiveFailures": 3
+  }
+}

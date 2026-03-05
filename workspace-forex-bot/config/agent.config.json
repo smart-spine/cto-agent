@@ -1,0 +1,12 @@
+{
+  "id": "forex-bot",
+  "name": "Forex Bot",
+  "responsibility": "Read USD/EUR and EUR/PLN rates and expose trend vs previous value.",
+  "skills": [
+    "forex-fetch",
+    "usd-eur",
+    "eur-pln",
+    "trend-memory",
+    "unit-test"
+  ]
+}

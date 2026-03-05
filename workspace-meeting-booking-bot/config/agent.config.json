@@ -1,0 +1,28 @@
+{
+  "id": "meeting-booking-bot",
+  "name": "Meeting Booking Bot",
+  "responsibility": "Book meetings via Google Calendar events.insert with deterministic calendar selection and route updates to Telegram topic 159.",
+  "timezone": "Europe/Warsaw",
+  "destination": {
+    "platform": "telegram",
+    "chatId": "-1003633569118",
+    "topicId": 159
+  },
+  "calendarBackend": {
+    "provider": "google-calendar",
+    "mode": "single-calendar",
+    "selectionRule": "if config.calendarId is set use it strictly, else use primary",
+    "credentials": {
+      "refreshToken": {
+        "source": "file",
+        "provider": "google-oauth-refresh-token-file",
+        "id": "value"
+      },
+      "clientSecret": {
+        "source": "file",
+        "provider": "google-client-secret-file",
+        "id": "value"
+      }
+    }
+  }
+}

@@ -1,0 +1,317 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.2",
+    "lastTouchedAt": "2026-03-03T20:13:21.877Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-02-27T12:52:52.880Z",
+    "lastRunVersion": "2026.2.26",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "openai:default": {
+        "provider": "openai",
+        "mode": "api_key"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai/gpt-5.2"
+      },
+      "models": {
+        "openai/gpt-5.1-codex": {
+          "alias": "GPT"
+        },
+        "openai/gpt-5.2": {}
+      },
+      "workspace": "/Users/uladzislaupraskou/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Main Agent",
+        "workspace": "/Users/uladzislaupraskou/.openclaw/workspace",
+        "agentDir": "/Users/uladzislaupraskou/.openclaw/agents/main/agent",
+        "identity": {
+          "name": "Main Agent"
+        }
+      },
+      {
+        "id": "cto-factory",
+        "default": false,
+        "name": "CTO Factory",
+        "workspace": "/Users/uladzislaupraskou/.openclaw/workspace-factory",
+        "agentDir": "/Users/uladzislaupraskou/.openclaw/agents/cto-factory/agent",
+        "model": {
+          "primary": "openrouter/openai/gpt-5.3-codex",
+          "fallbacks": [
+            "openrouter/openai/gpt-5.2-codex",
+            "openrouter/openai/gpt-5.1-codex"
+          ]
+        },
+        "identity": {
+          "name": "CTO Factory Agent",
+          "theme": "engineering",
+          "emoji": "factory"
+        }
+      },
+      {
+        "id": "fx-rates-5m",
+        "default": false,
+        "name": "FX Rates 5m Bot",
+        "workspace": "/Users/uladzislaupraskou/.openclaw/workspace",
+        "agentDir": "/Users/uladzislaupraskou/.openclaw/agents/fx-rates-5m/agent",
+        "model": {
+          "primary": "openrouter/openai/gpt-5.3-codex",
+          "fallbacks": [
+            "openrouter/openai/gpt-5.2-codex",
+            "openrouter/openai/gpt-5.1-codex"
+          ]
+        },
+        "identity": {
+          "name": "FX Rates 5m Bot",
+          "theme": "finance",
+          "emoji": "chart_with_upwards_trend"
+        },
+        "tools": {
+          "profile": "messaging",
+          "alsoAllow": [
+            "web_fetch"
+          ]
+        }
+      },
+      {
+        "id": "crypto-monitor",
+        "default": false,
+        "name": "Crypto Monitor",
+        "workspace": "/Users/uladzislaupraskou/.openclaw/workspace-crypto-monitor",
+        "agentDir": "/Users/uladzislaupraskou/.openclaw/workspace-crypto-monitor",
+        "model": {
+          "primary": "openrouter/openai/gpt-5.3-codex",
+          "fallbacks": [
+            "openrouter/openai/gpt-5.2-codex",
+            "openrouter/openai/gpt-5.1-codex"
+          ]
+        },
+        "identity": {
+          "name": "Crypto Monitor",
+          "theme": "finance",
+          "emoji": "chart_with_upwards_trend"
+        },
+        "tools": {
+          "profile": "messaging",
+          "alsoAllow": [
+            "web_fetch"
+          ]
+        }
+      },
+      {
+        "id": "meeting-booking-bot",
+        "default": false,
+        "name": "Meeting Booking Bot",
+        "workspace": "/Users/uladzislaupraskou/.openclaw/workspace-meeting-booking-bot",
+        "agentDir": "/Users/uladzislaupraskou/.openclaw/agents/meeting-booking-bot/agent",
+        "model": {
+          "primary": "openrouter/openai/gpt-5.3-codex",
+          "fallbacks": [
+            "openrouter/openai/gpt-5.2-codex",
+            "openrouter/openai/gpt-5.1-codex"
+          ]
+        },
+        "identity": {
+          "name": "Meeting Booking Bot",
+          "theme": "productivity",
+          "emoji": "spiral_calendar_pad"
+        }
+      },
+      {
+        "id": "reddit-openclaw-watcher",
+        "default": false,
+        "name": "Reddit OpenClaw Watcher",
+        "workspace": "/Users/uladzislaupraskou/.openclaw/workspace-reddit-openclaw-watcher",
+        "agentDir": "/Users/uladzislaupraskou/.openclaw/agents/reddit-openclaw-watcher/agent",
+        "model": {
+          "primary": "openrouter/openai/gpt-5.3-codex",
+          "fallbacks": [
+            "openrouter/openai/gpt-5.2-codex",
+            "openrouter/openai/gpt-5.1-codex"
+          ]
+        },
+        "identity": {
+          "name": "Reddit OpenClaw Watcher",
+          "theme": "monitoring",
+          "emoji": "mag"
+        },
+        "tools": {
+          "profile": "messaging",
+          "alsoAllow": [
+            "exec"
+          ]
+        }
+      }
+    ]
+  },
+  "bindings": [
+    {
+      "agentId": "cto-factory",
+      "match": {
+        "channel": "telegram",
+        "accountId": "default",
+        "peer": {
+          "kind": "group",
+          "id": "-1003633569118:topic:654"
+        }
+      }
+    },
+    {
+      "agentId": "crypto-monitor",
+      "match": {
+        "channel": "telegram",
+        "accountId": "default",
+        "peer": {
+          "kind": "group",
+          "id": "-1003633569118:topic:661"
+        }
+      }
+    },
+    {
+      "agentId": "meeting-booking-bot",
+      "match": {
+        "channel": "telegram",
+        "accountId": "default",
+        "peer": {
+          "kind": "group",
+          "id": "-1003633569118:topic:159"
+        }
+      }
+    },
+    {
+      "agentId": "reddit-openclaw-watcher",
+      "match": {
+        "channel": "telegram",
+        "accountId": "default",
+        "peer": {
+          "kind": "group",
+          "id": "-1003633569118:topic:220"
+        }
+      }
+    }
+  ],
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": true,
+    "nativeSkills": true,
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "commands": {
+        "native": true
+      },
+      "dmPolicy": "disabled",
+      "groups": {
+        "-1003633569118": {
+          "allowFrom": [
+            "7153051303"
+          ],
+          "topics": {
+            "159": {
+              "requireMention": false,
+              "groupPolicy": "allowlist"
+            },
+            "220": {
+              "requireMention": false,
+              "groupPolicy": "allowlist"
+            },
+            "654": {
+              "requireMention": false,
+              "groupPolicy": "allowlist"
+            },
+            "661": {
+              "requireMention": false,
+              "groupPolicy": "allowlist"
+            }
+          }
+        }
+      },
+      "groupAllowFrom": [
+        "7153051303"
+      ],
+      "groupPolicy": "allowlist",
+      "streaming": "partial",
+      "accounts": {
+        "default": {
+          "dmPolicy": "pairing",
+          "botToken": "${TELEGRAM_BOT_TOKEN}",
+          "groupAllowFrom": [
+            "7153051303"
+          ],
+          "groupPolicy": "allowlist",
+          "streaming": "partial"
+        }
+      }
+    }
+  },
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "cto-factory",
+        "meeting-booking-bot",
+        "fx-rates-5m",
+        "crypto-monitor",
+        "main",
+        "reddit-openclaw-watcher"
+      ]
+    },
+    "sessions": {
+      "visibility": "all"
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  },
+  "secrets": {
+    "providers": {
+      "google-client-secret-file": {
+        "source": "file",
+        "path": "/Users/uladzislaupraskou/Downloads/client_secret.json",
+        "mode": "singleValue"
+      },
+      "google-oauth-refresh-token-file": {
+        "source": "file",
+        "path": "/Users/uladzislaupraskou/.openclaw/secrets/google-oauth-refresh-token.json",
+        "mode": "singleValue"
+      }
+    }
+  }
+}

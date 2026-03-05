@@ -1,0 +1,29 @@
+{
+  "id": "crypto-monitor",
+  "name": "Crypto Monitor",
+  "responsibility": "Fetch BTC/USD and ETH/USD spot prices with 24h change and report trend vs previous run.",
+  "skills": [
+    "coingecko-fetch",
+    "btc-usd",
+    "eth-usd",
+    "trend-memory",
+    "telegram-routing",
+    "unit-test"
+  ],
+  "schedule": {
+    "cron": "*/5 * * * *"
+  },
+  "destination": {
+    "platform": "telegram",
+    "chatId": "-1003633569118",
+    "topicId": 654,
+    "bot": "@openclaw_smartspine_bot",
+    "credentials": {
+      "botToken": {
+        "source": "secretRef",
+        "provider": "openclaw",
+        "id": "telegram/openclaw_smartspine_bot/token"
+      }
+    }
+  }
+}
