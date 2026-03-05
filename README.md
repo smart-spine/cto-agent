@@ -14,17 +14,46 @@ It does not write code directly — it delegates all implementation to **Codex C
 
 ## Prerequisites
 
-Before installation, confirm the following:
+Before installation, prepare:
 
-1. **OpenClaw CLI** installed and working (`openclaw --version`)
-2. **Codex CLI** installed and authenticated
-   - Authenticate on the same server/host where OpenClaw is running using an OpenAI API key (pay-as-you-go billing)
-   - Install: `npm install -g @openai/codex`
-   - Login with API key: `printenv OPENAI_API_KEY | codex login --with-api-key`
-   - Verify: `codex --version` must succeed
-3. **LLM provider** — you need an API key from any supported provider (e.g., OpenRouter, OpenAI, Anthropic, etc.)
-4. `python3`, `jq`, `rsync` available in PATH
-5. **Telegram bot token** if you want the CTO agent to work via Telegram
+1. **Server access** with a sudo-capable user
+2. **Network access** to GitHub and npm registries
+3. **LLM provider API key** (OpenAI / OpenRouter / Anthropic, etc.)
+4. **Telegram bot token** if you want Telegram integration
+
+## Automated Script Order
+
+Run scripts from the repository root, as files (do not paste script contents into the shell):
+
+```bash
+cd /path/to/cto-agent
+chmod +x scripts/lib/common.sh scripts/00_bootstrap_dependencies.sh scripts/01_install_openclaw.sh scripts/02_setup_telegram_pairing.sh scripts/03_deploy_cto_agent.sh
+
+# 0) Base OS dependencies (Ubuntu/Debian)
+./scripts/00_bootstrap_dependencies.sh
+
+# 1) Install OpenClaw + Codex + local runtime config
+./scripts/01_install_openclaw.sh
+
+# 2) Optional: Telegram pairing
+./scripts/02_setup_telegram_pairing.sh
+
+# 3) Deploy CTO factory agent and bind topic
+./scripts/03_deploy_cto_agent.sh
+```
+
+## Zero-to-Server Bootstrap (copy-paste on clean Ubuntu)
+
+If the server is fresh and does not even have `git`, run this single command first:
+
+```bash
+sudo bash -lc 'apt-get update -qq && apt-get install -y -qq ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/openclaw-root-monorepo/scripts/00_bootstrap_dependencies.sh | bash'
+```
+
+What it does:
+- installs base dependencies (`git`, `python3`, `jq`, `rsync`, etc.)
+- clones this repository to `$HOME/cto-agent`
+- prints the exact next commands to continue (`01 -> 02 -> 03`)
 
 ## Installation
 
