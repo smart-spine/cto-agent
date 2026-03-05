@@ -218,6 +218,17 @@ default_account = telegram.setdefault("accounts", {}).setdefault("default", {})
 if telegram_bot_token:
     default_account["botToken"] = telegram_bot_token
 telegram.setdefault("groupPolicy", "allowlist")
+default_account.setdefault("groupPolicy", "allowlist")
+
+if not allowed_uid:
+    # Auto-seed from existing allowlists so a newly bound group does not become unreachable.
+    account_allow = default_account.get("groupAllowFrom", [])
+    global_allow = telegram.get("groupAllowFrom", [])
+    for candidate in list(account_allow) + list(global_allow):
+        candidate = str(candidate).strip()
+        if candidate:
+            allowed_uid = candidate
+            break
 
 groups = telegram.setdefault("groups", {})
 group_cfg = groups.setdefault(group_id, {})
@@ -231,6 +242,9 @@ if allowed_uid:
     global_allow = set(str(x) for x in telegram.get("groupAllowFrom", []) if str(x).strip())
     global_allow.add(allowed_uid)
     telegram["groupAllowFrom"] = sorted(global_allow)
+    account_allow = set(str(x) for x in default_account.get("groupAllowFrom", []) if str(x).strip())
+    account_allow.add(allowed_uid)
+    default_account["groupAllowFrom"] = sorted(account_allow)
     group_allow = set(str(x) for x in group_cfg.get("allowFrom", []) if str(x).strip())
     group_allow.add(allowed_uid)
     group_cfg["allowFrom"] = sorted(group_allow)
@@ -269,6 +283,9 @@ collect_binding_inputs() {
   fi
   read -r -p "Group ID: " BIND_GROUP_ID
   read -r -p "Topic ID: " BIND_TOPIC_ID
+  if [[ -z "${TELEGRAM_ALLOWED_USER_ID}" ]]; then
+    read -r -p "Telegram user ID to allow (optional; blank = auto from existing allowlist): " TELEGRAM_ALLOWED_USER_ID
+  fi
   [[ -n "${BIND_GROUP_ID}" ]] || die "Group ID is required."
   [[ -n "${BIND_TOPIC_ID}" ]] || die "Topic ID is required."
 }
