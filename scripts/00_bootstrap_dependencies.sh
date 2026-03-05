@@ -71,6 +71,47 @@ assert_supported_os() {
   esac
 }
 
+cleanup_stale_nodesource() {
+  # Some hosts keep stale NodeSource entries without keys, which breaks apt update noise-wise.
+  local stale_files=""
+  stale_files="$(
+    run_as_root bash -lc "grep -RIl 'deb\\.nodesource\\.com' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true"
+  )"
+  if [[ -n "${stale_files}" ]]; then
+    log_warn "Removing stale NodeSource apt entries."
+    while IFS= read -r file; do
+      [[ -n "${file}" ]] || continue
+      run_as_root sed -i '/deb\.nodesource\.com/d' "${file}" || true
+      run_as_root sed -i '/nodesource\.com/d' "${file}" || true
+    done <<< "${stale_files}"
+  fi
+  run_as_root rm -f \
+    /etc/apt/sources.list.d/nodesource.list \
+    /etc/apt/sources.list.d/nodesource.list.save \
+    /etc/apt/keyrings/nodesource.gpg \
+    /usr/share/keyrings/nodesource.gpg || true
+}
+
+resolve_default_repo_dir() {
+  local base_home="${HOME:-/root}"
+  if [[ "$(id -u)" -eq 0 ]]; then
+    local sudo_user="${SUDO_USER:-}"
+    if [[ -n "${sudo_user}" && "${sudo_user}" != "root" ]]; then
+      local sudo_home=""
+      if command -v getent >/dev/null 2>&1; then
+        sudo_home="$(getent passwd "${sudo_user}" | cut -d: -f6 || true)"
+      fi
+      if [[ -z "${sudo_home}" && -d "/home/${sudo_user}" ]]; then
+        sudo_home="/home/${sudo_user}"
+      fi
+      if [[ -n "${sudo_home}" ]]; then
+        base_home="${sudo_home}"
+      fi
+    fi
+  fi
+  printf "%s/cto-agent" "${base_home}"
+}
+
 resolve_repo_branch() {
   local repo_url="$1"
   local requested="$2"
@@ -125,7 +166,9 @@ EOF
 main() {
   local repo_url="${CTO_REPO_URL:-https://github.com/smart-spine/cto-agent.git}"
   local requested_branch="${CTO_REPO_BRANCH:-main}"
-  local repo_dir="${CTO_REPO_DIR:-$HOME/cto-agent}"
+  local default_repo_dir
+  default_repo_dir="$(resolve_default_repo_dir)"
+  local repo_dir="${CTO_REPO_DIR:-$default_repo_dir}"
   local auto_clone="${AUTO_CLONE_REPO:-true}"
 
   require_cmd bash
@@ -133,6 +176,7 @@ main() {
   assert_supported_os
 
   log_info "Stage 1/4: Installing base OS dependencies."
+  cleanup_stale_nodesource
   apt_retry update -qq
   apt_retry install -y -qq \
     ca-certificates curl git jq python3 python3-venv rsync sudo gnupg lsb-release \
