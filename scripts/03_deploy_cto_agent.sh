@@ -19,7 +19,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
 CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/smart-spine/cto-agent.git}"
-CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-openclaw-root-monorepo}"
+CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-main}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.2}"
 BIND_GROUP_ID="${BIND_GROUP_ID:-}"
 BIND_TOPIC_ID="${BIND_TOPIC_ID:-}"
@@ -41,15 +41,10 @@ resolve_repo_branch() {
     printf "%s" "${requested}"
     return 0
   fi
-  if git ls-remote --exit-code --heads "${CTO_REPO_URL}" "refs/heads/codex/${requested}" >/dev/null 2>&1; then
-    printf "codex/%s" "${requested}"
-    return 0
-  fi
-  if git ls-remote --exit-code --heads "${CTO_REPO_URL}" "refs/heads/codex/openclaw-root-monorepo" >/dev/null 2>&1; then
-    printf "codex/openclaw-root-monorepo"
-    return 0
-  fi
   if git ls-remote --exit-code --heads "${CTO_REPO_URL}" "refs/heads/main" >/dev/null 2>&1; then
+    if [[ "${requested}" != "main" ]]; then
+      log_warn "Requested branch '${requested}' not found. Falling back to 'main'."
+    fi
     printf "main"
     return 0
   fi

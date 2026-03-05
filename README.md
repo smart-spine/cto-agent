@@ -21,13 +21,13 @@ Implementation policy inside CTO agent:
 Run this on the server first:
 
 ```bash
-sudo bash -lc 'rm -f /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg /usr/share/keyrings/nodesource.gpg; apt-get update -qq && apt-get install -y -qq ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/codex/openclaw-root-monorepo/scripts/00_bootstrap_dependencies.sh | bash'
+sudo bash -lc 'rm -f /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg /usr/share/keyrings/nodesource.gpg; apt-get update -qq && apt-get install -y -qq ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/main/scripts/00_bootstrap_dependencies.sh | bash'
 ```
 
 What this does:
 - installs base dependencies
 - clones this repo to `~/cto-agent`
-- checks out remote branch `remotes/origin/codex/openclaw-root-monorepo` when available
+- uses `main` by default (no automatic switch to `codex/*` branches)
 - prints next commands
 
 ## Standard Install Order

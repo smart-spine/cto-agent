@@ -79,10 +79,6 @@ resolve_repo_branch() {
     printf "%s" "${requested}"
     return 0
   fi
-  if git ls-remote --exit-code --heads "${repo_url}" "refs/heads/codex/${requested}" >/dev/null 2>&1; then
-    printf "codex/%s" "${requested}"
-    return 0
-  fi
   if git ls-remote --exit-code --heads "${repo_url}" "refs/heads/main" >/dev/null 2>&1; then
     printf "main"
     return 0
@@ -111,18 +107,6 @@ clone_or_update_repo() {
   git clone --depth 1 --branch "${branch}" "${repo_url}" "${repo_dir}"
 }
 
-final_checkout_codex_branch() {
-  local repo_dir="$1"
-  local target_ref="refs/remotes/origin/codex/openclaw-root-monorepo"
-  git -C "${repo_dir}" fetch origin --prune
-  if git -C "${repo_dir}" show-ref --verify --quiet "${target_ref}"; then
-    log_info "Final checkout: git checkout remotes/origin/codex/openclaw-root-monorepo"
-    git -C "${repo_dir}" checkout remotes/origin/codex/openclaw-root-monorepo
-  else
-    log_warn "Final checkout skipped: ${target_ref} not found."
-  fi
-}
-
 print_next_steps() {
   local repo_dir="$1"
   cat <<EOF
@@ -140,7 +124,7 @@ EOF
 
 main() {
   local repo_url="${CTO_REPO_URL:-https://github.com/smart-spine/cto-agent.git}"
-  local requested_branch="${CTO_REPO_BRANCH:-openclaw-root-monorepo}"
+  local requested_branch="${CTO_REPO_BRANCH:-main}"
   local repo_dir="${CTO_REPO_DIR:-$HOME/cto-agent}"
   local auto_clone="${AUTO_CLONE_REPO:-true}"
 
@@ -174,7 +158,6 @@ main() {
 
   log_info "Stage 4/4: Cloning/updating repository."
   clone_or_update_repo "${repo_url}" "${resolved_branch}" "${repo_dir}"
-  final_checkout_codex_branch "${repo_dir}"
 
   if [[ -f "${repo_dir}/scripts/00_bootstrap_dependencies.sh" ]]; then
     chmod +x "${repo_dir}/scripts/00_bootstrap_dependencies.sh" || true
