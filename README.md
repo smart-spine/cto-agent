@@ -10,10 +10,11 @@ Implementation policy inside CTO agent:
 ## What You Need
 
 - An EC2 Ubuntu server (SSH access as `ubuntu` with `sudo`)
-- API key for your LLM provider (OpenAI / OpenRouter / etc.)
+- OpenAI API key
 - Telegram bot token (if using Telegram)
-- Telegram group ID for you CTO Factory
-- Telegram topic ID for you CTO Factory
+- Telegram destination:
+  - topic link (for example `https://t.me/c/1234567890/42`), or
+  - direct chat with your bot
 - Your Telegram user ID
 
 ## Fastest Path (Clean Ubuntu EC2)
@@ -57,6 +58,8 @@ Script 1 will ask for:
   - auto-generate (recommended)
   - manual input
 
+This deployment pack is tuned for **OpenAI only**.
+
 ### 2) Telegram setup + pairing
 
 ```bash
@@ -72,15 +75,33 @@ What script 2 does:
 - auto-approves pairing code
 - auto-whitelists paired user ID in Telegram allowlists
 
-### 3) Deploy CTO agent and bind to Telegram topic
+### 3) Deploy CTO agent and choose Telegram binding mode
 
 ```bash
 ./scripts/03_deploy_cto_agent.sh
 ```
 
-The script will ask for:
-- group id
-- topic id
+The script now asks where to bind the CTO bot:
+- `topic`: paste a Telegram topic link, and the script auto-parses group/topic
+  - supports `https://t.me/c/<group>/<topic>`
+  - also supports links like `https://t.me/<public_group_username>/<topic>` (requires valid bot token to resolve group ID)
+- `direct`: bind to direct chat with a Telegram user ID
+
+Non-interactive examples:
+
+```bash
+# Topic binding via link
+NON_INTERACTIVE=true \
+BIND_MODE=topic \
+BIND_TELEGRAM_LINK="https://t.me/c/1234567890/42" \
+./scripts/03_deploy_cto_agent.sh
+
+# Direct-chat binding
+NON_INTERACTIVE=true \
+BIND_MODE=direct \
+BIND_DIRECT_USER_ID="7153051303" \
+./scripts/03_deploy_cto_agent.sh
+```
 
 ## [AUTO]Post-Install Checks
 
